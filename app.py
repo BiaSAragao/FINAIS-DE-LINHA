@@ -220,31 +220,62 @@ elif menu == "Cadastrar / Editar Final de Linha":
 elif menu == "Consultar Linhas":
     st.header("Consultar Linhas")
 
-    cur.execute("""
-        SELECT l.codigo_linha,
-               l.nome_linha,
-               f.rua,
-               f.bairro,
-               f.latitude,
-               f.longitude,
-               m.url_imagem
-        FROM linha l
-        LEFT JOIN final_linha f ON f.linha_id = l.id
-        LEFT JOIN mapa_linha m ON m.linha_id = l.id
-        ORDER BY l.codigo_linha
-    """)
+    busca = st.text_input(
+        "🔎 Pesquisar linha (código ou nome)",
+        placeholder="Ex: 007 ou Jardim Europa"
+    )
 
-    for codigo, nome, rua, bairro, lat, lon, img in cur.fetchall():
-        st.subheader(f"Linha {codigo} – {nome}")
+    if busca:
+        cur.execute("""
+            SELECT l.codigo_linha,
+                   l.nome_linha,
+                   f.rua,
+                   f.bairro,
+                   f.latitude,
+                   f.longitude,
+                   m.url_imagem
+            FROM linha l
+            LEFT JOIN final_linha f ON f.linha_id = l.id
+            LEFT JOIN mapa_linha m ON m.linha_id = l.id
+            WHERE l.codigo_linha ILIKE %s
+               OR l.nome_linha ILIKE %s
+            ORDER BY l.codigo_linha
+        """, (f"%{busca}%", f"%{busca}%"))
 
-        if rua or bairro:
-            st.write(f"📍 {rua or ''} - {bairro or ''}")
+    else:
+        cur.execute("""
+            SELECT l.codigo_linha,
+                   l.nome_linha,
+                   f.rua,
+                   f.bairro,
+                   f.latitude,
+                   f.longitude,
+                   m.url_imagem
+            FROM linha l
+            LEFT JOIN final_linha f ON f.linha_id = l.id
+            LEFT JOIN mapa_linha m ON m.linha_id = l.id
+            ORDER BY l.codigo_linha
+            LIMIT 50
+        """)
 
-        if lat and lon:
-            maps = f"https://www.google.com/maps?q={lat},{lon}"
-            st.link_button("Abrir no Google Maps", maps)
+    resultados = cur.fetchall()
 
-        if img:
-            st.image(img, use_container_width=True)
+    if not resultados:
+        st.warning("Nenhuma linha encontrada.")
+    else:
+        st.caption(f"{len(resultados)} linha(s) encontrada(s).")
 
-        st.divider()
+        for codigo, nome, rua, bairro, lat, lon, img in resultados:
+            st.subheader(f"Linha {codigo} – {nome}")
+
+            if rua or bairro:
+                st.write(f"📍 {rua or ''} - {bairro or ''}")
+
+            if lat and lon:
+                maps = f"https://www.google.com/maps?q={lat},{lon}"
+                st.link_button("Abrir no Google Maps", maps)
+
+            if img:
+                st.image(img, use_container_width=True)
+
+            st.divider()
