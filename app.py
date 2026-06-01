@@ -279,55 +279,55 @@ elif menu == "Consultar Linhas":
                 st.image(img, use_container_width=True)
 
             # HORÁRIOS
-cur.execute(
-    """
-    SELECT tipo_dia, horario, observacao
-    FROM horario_saida hs
-    JOIN linha l ON l.id = hs.id_linha
-    WHERE l.codigo_linha = %s
-    ORDER BY
-        CASE tipo_dia
-            WHEN 'UTIL' THEN 1
-            WHEN 'SABADO' THEN 2
-            WHEN 'DOMINGO' THEN 3
-        END,
-        horario
-    """,
-    (codigo,)
-)
-
-horarios = cur.fetchall()
-
-if horarios:
-    st.markdown("### 🕒 Horários")
-
-    dias = {
-        "UTIL": [],
-        "SABADO": [],
-        "DOMINGO": []
-    }
-
-    for tipo_dia, horario, observacao in horarios:
-        texto = horario.strftime("%H:%M")
-
-        if observacao:
-            texto += f" ({observacao})"
-
-        dias[tipo_dia].append(texto)
-
-    if dias["UTIL"]:
-        st.markdown("**Dias Úteis**")
-        st.write(" • ".join(dias["UTIL"]))
-
-    if dias["SABADO"]:
-        st.markdown("**Sábados**")
-        st.write(" • ".join(dias["SABADO"]))
-
-    if dias["DOMINGO"]:
-        st.markdown("**Domingos**")
-        st.write(" • ".join(dias["DOMINGO"]))
-
-else:
-    st.info("Horários ainda não cadastrados.")
+            cur.execute(
+                """
+                SELECT tipo_dia, horario, observacao
+                FROM horario_saida hs
+                JOIN linha l ON l.id = hs.id_linha
+                WHERE l.codigo_linha = %s
+                ORDER BY
+                    CASE tipo_dia
+                        WHEN 'UTIL' THEN 1
+                        WHEN 'SABADO' THEN 2
+                        WHEN 'DOMINGO' THEN 3
+                    END,
+                    horario
+                """,
+                (codigo,)
+            )
+            
+            horarios = cur.fetchall()
+            
+            if horarios:
+                st.markdown("### 🕒 Horários")
+            
+                dias = {
+                    "UTIL": [],
+                    "SABADO": [],
+                    "DOMINGO": []
+                }
+            
+                for tipo_dia, horario, observacao in horarios:
+                    texto = horario.strftime("%H:%M")
+            
+                    if observacao:
+                        texto += f" ({observacao})"
+            
+                    dias[tipo_dia].append(texto)
+            
+                if dias["UTIL"]:
+                    st.markdown("**Dias Úteis**")
+                    st.write(" • ".join(dias["UTIL"]))
+            
+                if dias["SABADO"]:
+                    st.markdown("**Sábados**")
+                    st.write(" • ".join(dias["SABADO"]))
+            
+                if dias["DOMINGO"]:
+                    st.markdown("**Domingos**")
+                    st.write(" • ".join(dias["DOMINGO"]))
+            
+            else:
+                st.info("Horários ainda não cadastrados.")
 
             st.divider()
