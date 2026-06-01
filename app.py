@@ -1,0 +1,373 @@
+import streamlit as st
+import os
+from dotenv import load_dotenv
+from db import get_connection
+from r2 import upload_imagem
+
+load_dotenv()
+
+st.set_page_config(page_title="Linhas de Ônibus", layout="centered", initial_sidebar_state="collapsed")
+
+# Custom CSS for Mobile First and aesthetics
+st.markdown("""
+<style>
+/* Remove default Streamlit top padding and main menu to look cleaner */
+header[data-testid="stHeader"] {
+    display: none;
+}
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+/* Style for maps */
+img {
+    max-width: 100% !important;
+    border-radius: 8px;
+    margin: auto;
+    display: block;
+}
+/* Style the times / horários */
+.horario-pill {
+    display: inline-block;
+    background-color: #f0f2f6;
+    color: #31333F;
+    padding: 6px 12px;
+    border-radius: 16px;
+    margin: 4px;
+    font-size: 0.9em;
+    font-weight: 500;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+@media (prefers-color-scheme: dark) {
+    .horario-pill {
+        background-color: #262730;
+        color: #FAFAFA;
+        box-shadow: 0 1px 2px rgba(255,255,255,0.05);
+    }
+}
+/* Adjust expander styling */
+[data-testid="stExpander"] {
+    border: none !important;
+    box-shadow: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.title("🚍 Linhas de Ônibus")
+st.markdown("**Finais de Linha e Itinerários**")
+
+conn = get_connection()
+cur = conn.cursor()
+
+# =========================
+# LOGIN SIMPLES via URL
+# =========================
+def check_admin():
+    query_params = st.query_params
+    return query_params.get("admin", "").lower() in ["true", "1", "yes"]
+
+is_admin_route = check_admin()
+
+if is_admin_route:
+    if "logado" not in st.session_state:
+        st.session_state.logado = False
+
+    if not st.session_state.logado:
+        st.subheader("🔐 Acesso Restrito (Admin)")
+        with st.container(border=True):
+            user = st.text_input("Usuário")
+            password = st.text_input("Senha", type="password")
+
+            if st.button("Entrar", use_container_width=True, type="primary"):
+                if (
+                    user == os.getenv("ADMIN_USER")
+                    and password == os.getenv("ADMIN_PASSWORD")
+                ):
+                    st.session_state.logado = True
+                    st.rerun()
+                else:
+                    st.error("Usuário ou senha inválidos")
+        st.stop() # Stop execution se não logado, impedindo a exibição do resto
+
+# =========================
+# MENUS ADMIN (se logado)
+# =========================
+if is_admin_route and st.session_state.get("logado"):
+    tab_consulta, tab_cad_linha, tab_edit_linha, tab_final = st.tabs([
+        "🔎 Consultar", 
+        "➕ Nova Linha", 
+        "✏️ Editar", 
+        "📍 Final/Mapa"
+    ])
+    
+    with tab_cad_linha:
+        st.subheader("Cadastrar Nova Linha")
+        with st.container(border=True):
+            codigo = st.text_input("Código da linha (Ex: 007)")
+            nome = st.text_input("Nome da linha (Ex: Jardim Europa)")
+
+            if st.button("Salvar Linha", use_container_width=True, type="primary"):
+                try:
+                    cur.execute(
+                        "INSERT INTO linha (codigo_linha, nome_linha) VALUES (%s, %s)",
+                        (codigo, nome)
+                    )
+                    conn.commit()
+                    st.success("Linha cadastrada com sucesso!")
+                except Exception:
+                    conn.rollback()
+                    st.error("Erro ao cadastrar. Código pode já existir.")
+
+    with tab_edit_linha:
+        st.subheader("Editar Linha Existente")
+        cur.execute("SELECT id, codigo_linha, nome_linha, ativa FROM linha ORDER BY codigo_linha")
+        linhas = cur.fetchall()
+
+        if linhas:
+            with st.container(border=True):
+                linha = st.selectbox(
+                    "Selecione a Linha",
+                    linhas,
+                    format_func=lambda x: f"{x[1]} - {x[2]}"
+                )
+
+                linha_id = linha[0]
+                codigo_atual = linha[1]
+                nome_atual = linha[2]
+                ativa_atual = linha[3]
+
+                codigo = st.text_input("Código da linha", value=codigo_atual, key="edit_cod")
+                nome = st.text_input("Nome da linha", value=nome_atual, key="edit_nome")
+                ativa = st.checkbox("Linha ativa", value=ativa_atual)
+
+                if st.button("Salvar alterações", use_container_width=True, type="primary"):
+                    try:
+                        cur.execute(
+                            """
+                            UPDATE linha
+                            SET codigo_linha = %s,
+                                nome_linha = %s,
+                                ativa = %s
+                            WHERE id = %s
+                            """,
+                            (codigo, nome, ativa, linha_id)
+                        )
+                        conn.commit()
+                        st.success("Linha atualizada com sucesso!")
+                    except Exception:
+                        conn.rollback()
+                        st.error("Erro ao salvar. Código pode já existir.")
+        else:
+            st.info("Nenhuma linha cadastrada ainda.")
+
+    with tab_final:
+        st.subheader("Cadastrar / Editar Final de Linha")
+        cur.execute("SELECT id, codigo_linha, nome_linha FROM linha ORDER BY codigo_linha")
+        linhas_final = cur.fetchall()
+
+        if linhas_final:
+            with st.container(border=True):
+                linha_f = st.selectbox(
+                    "Selecione a Linha",
+                    linhas_final,
+                    format_func=lambda x: f"{x[1]} - {x[2]}",
+                    key="final_linha_select"
+                )
+
+                linha_f_id = linha_f[0]
+
+                # Buscar dados atuais do final de linha
+                cur.execute(
+                    """
+                    SELECT rua, bairro, latitude, longitude
+                    FROM final_linha
+                    WHERE linha_id = %s
+                    """,
+                    (linha_f_id,)
+                )
+                final = cur.fetchone()
+
+                rua_atual = final[0] if final else ""
+                bairro_atual = final[1] if final else ""
+                lat_atual = float(final[2]) if final and final[2] else 0.0
+                lon_atual = float(final[3]) if final and final[3] else 0.0
+
+                rua = st.text_input("Rua", value=rua_atual)
+                bairro = st.text_input("Bairro", value=bairro_atual)
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    latitude = st.number_input("Latitude", value=lat_atual, format="%.6f")
+                with col2:
+                    longitude = st.number_input("Longitude", value=lon_atual, format="%.6f")
+
+                # Buscar mapa atual
+                cur.execute("SELECT url_imagem FROM mapa_linha WHERE linha_id = %s", (linha_f_id,))
+                mapa = cur.fetchone()
+
+                if mapa:
+                    st.markdown("🗺️ **Mapa atual do itinerário:**")
+                    st.image(mapa[0], use_container_width=True)
+
+                imagem = st.file_uploader(
+                    "Enviar novo mapa (opcional)",
+                    type=["png", "jpg", "jpeg"]
+                )
+
+                if st.button("Salvar Final de Linha", use_container_width=True, type="primary"):
+                    # FINAL DE LINHA
+                    cur.execute(
+                        """
+                        INSERT INTO final_linha
+                        (linha_id, rua, bairro, latitude, longitude)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (linha_id)
+                        DO UPDATE SET
+                            rua = EXCLUDED.rua,
+                            bairro = EXCLUDED.bairro,
+                            latitude = EXCLUDED.latitude,
+                            longitude = EXCLUDED.longitude
+                        """,
+                        (linha_f_id, rua, bairro, latitude, longitude)
+                    )
+
+                    # MAPA
+                    if imagem:
+                        ext = imagem.name.split(".")[-1]
+                        nome_arquivo = f"linha_{linha_f[1]}.{ext}"
+                        url = upload_imagem(imagem, nome_arquivo)
+
+                        cur.execute(
+                            """
+                            INSERT INTO mapa_linha (linha_id, url_imagem)
+                            VALUES (%s, %s)
+                            ON CONFLICT (linha_id)
+                            DO UPDATE SET url_imagem = EXCLUDED.url_imagem
+                            """,
+                            (linha_f_id, url)
+                        )
+
+                    conn.commit()
+                    st.success("Informações atualizadas com sucesso!")
+        else:
+            st.info("Cadastre uma linha primeiro.")
+
+    container_consulta = tab_consulta
+else:
+    container_consulta = st.container()
+
+# =========================
+# CONSULTA PÚBLICA (Cards Móveis)
+# =========================
+with container_consulta:
+    busca = st.text_input(
+        "🔎 Buscar linha",
+        placeholder="Digite o código ou nome (Ex: 007 ou Jardim Europa)"
+    )
+
+    if busca:
+        cur.execute("""
+            SELECT l.id,
+                   l.codigo_linha,
+                   l.nome_linha,
+                   f.rua,
+                   f.bairro,
+                   f.latitude,
+                   f.longitude,
+                   m.url_imagem
+            FROM linha l
+            LEFT JOIN final_linha f ON f.linha_id = l.id
+            LEFT JOIN mapa_linha m ON m.linha_id = l.id
+            WHERE l.codigo_linha ILIKE %s
+               OR l.nome_linha ILIKE %s
+            ORDER BY l.codigo_linha
+        """, (f"%{busca}%", f"%{busca}%"))
+    else:
+        cur.execute("""
+            SELECT l.id,
+                   l.codigo_linha,
+                   l.nome_linha,
+                   f.rua,
+                   f.bairro,
+                   f.latitude,
+                   f.longitude,
+                   m.url_imagem
+            FROM linha l
+            LEFT JOIN final_linha f ON f.linha_id = l.id
+            LEFT JOIN mapa_linha m ON m.linha_id = l.id
+            ORDER BY l.codigo_linha
+            LIMIT 50
+        """)
+
+    resultados = cur.fetchall()
+
+    if not resultados:
+        st.warning("Nenhuma linha encontrada.")
+    else:
+        st.caption(f"{len(resultados)} linha(s) encontrada(s).")
+
+        for linha_id, codigo, nome, rua, bairro, lat, lon, img in resultados:
+            # Uso de container(border=True) para criar um CARD amigável para mobile
+            with st.container(border=True):
+                st.subheader(f"🚍 Linha {codigo}")
+                st.markdown(f"**{nome}**")
+
+                if rua or bairro:
+                    st.markdown(f"📍 {rua or ''} - {bairro or ''}")
+
+                if lat and lon:
+                    maps = f"https://www.google.com/maps?q={lat},{lon}"
+                    st.link_button("🗺️ Abrir no Google Maps", maps, use_container_width=True)
+
+                if img:
+                    st.image(img, use_container_width=True)
+
+                # =========================
+                # HORÁRIOS
+                # =========================
+                cur.execute("""
+                    SELECT tipo_dia, horario, observacao
+                    FROM horario_saida
+                    WHERE id_linha = %s
+                    ORDER BY
+                        CASE tipo_dia
+                            WHEN 'UTIL' THEN 1
+                            WHEN 'SABADO' THEN 2
+                            WHEN 'DOMINGO' THEN 3
+                        END,
+                        horario
+                """, (linha_id,))
+
+                horarios = cur.fetchall()
+
+                if horarios:
+                    dias = {
+                        "UTIL": [],
+                        "SABADO": [],
+                        "DOMINGO": []
+                    }
+
+                    for tipo_dia, horario, observacao in horarios:
+                        texto = horario.strftime("%H:%M")
+                        if observacao:
+                            texto += f" ({observacao})"
+                        dias[tipo_dia].append(texto)
+
+                    st.markdown("🕒 **Horários**")
+
+                    if dias["UTIL"]:
+                        with st.expander("🗓️ Dias Úteis", expanded=False):
+                            html_util = " ".join([f"<span class='horario-pill'>{h}</span>" for h in dias["UTIL"]])
+                            st.markdown(html_util, unsafe_allow_html=True)
+
+                    if dias["SABADO"]:
+                        with st.expander("🗓️ Sábados", expanded=False):
+                            html_sab = " ".join([f"<span class='horario-pill'>{h}</span>" for h in dias["SABADO"]])
+                            st.markdown(html_sab, unsafe_allow_html=True)
+
+                    if dias["DOMINGO"]:
+                        with st.expander("🗓️ Domingos", expanded=False):
+                            html_dom = " ".join([f"<span class='horario-pill'>{h}</span>" for h in dias["DOMINGO"]])
+                            st.markdown(html_dom, unsafe_allow_html=True)
+                else:
+                    st.info("Horários não cadastrados.")
