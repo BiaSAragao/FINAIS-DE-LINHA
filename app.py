@@ -324,17 +324,79 @@ elif menu == "Consultar Linhas":
             
                     dias[tipo_dia].append(texto)
             
-                if dias["UTIL"]:
-                    st.markdown("**Dias Úteis**")
-                    st.write(" • ".join(dias["UTIL"]))
-            
-                if dias["SABADO"]:
-                    st.markdown("**Sábados**")
-                    st.write(" • ".join(dias["SABADO"]))
-            
-                if dias["DOMINGO"]:
-                    st.markdown("**Domingos**")
-                    st.write(" • ".join(dias["DOMINGO"]))
+                st.subheader("🕒 Horários")
+
+                tab1, tab2, tab3 = st.tabs([
+                    "🗓️ Dias Úteis",
+                    "🗓️ Sábados",
+                    "🗓️ Domingos"
+                ])
+                
+                with tab1:
+                    if dias["UTIL"]:
+                        html = ""
+                
+                        for horario in dias["UTIL"]:
+                            html += f"""
+                            <span style="
+                                background:#f0f2f6;
+                                padding:6px 10px;
+                                margin:4px;
+                                border-radius:12px;
+                                display:inline-block;
+                                font-size:14px;
+                            ">
+                                {horario}
+                            </span>
+                            """
+                
+                        st.markdown(html, unsafe_allow_html=True)
+                    else:
+                        st.info("Não há horários cadastrados.")
+                
+                with tab2:
+                    if dias["SABADO"]:
+                        html = ""
+                
+                        for horario in dias["SABADO"]:
+                            html += f"""
+                            <span style="
+                                background:#f0f2f6;
+                                padding:6px 10px;
+                                margin:4px;
+                                border-radius:12px;
+                                display:inline-block;
+                                font-size:14px;
+                            ">
+                                {horario}
+                            </span>
+                            """
+                
+                        st.markdown(html, unsafe_allow_html=True)
+                    else:
+                        st.info("Esta linha não opera aos sábados.")
+                
+                with tab3:
+                    if dias["DOMINGO"]:
+                        html = ""
+                
+                        for horario in dias["DOMINGO"]:
+                            html += f"""
+                            <span style="
+                                background:#f0f2f6;
+                                padding:6px 10px;
+                                margin:4px;
+                                border-radius:12px;
+                                display:inline-block;
+                                font-size:14px;
+                            ">
+                                {horario}
+                            </span>
+                            """
+                
+                        st.markdown(html, unsafe_allow_html=True)
+                    else:
+                        st.info("Esta linha não opera aos domingos.")
             
             else:
                 st.info("Horários ainda não cadastrados.")
