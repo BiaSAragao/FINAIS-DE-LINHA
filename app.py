@@ -232,10 +232,9 @@ elif menu == "Consultar Linhas":
     st.header("Consultar Linhas")
 
     def exibir_horarios(lista_horarios):
-
-    for i in range(0, len(lista_horarios), 4):
-        linha = lista_horarios[i:i+4]
-        st.text(" | ".join(linha))
+        for i in range(0, len(lista_horarios), 4):
+            linha = lista_horarios[i:i+4]
+            st.text(" | ".join(linha))
 
     busca = st.text_input(
         "🔎 Pesquisar linha (código ou nome)",
@@ -244,7 +243,8 @@ elif menu == "Consultar Linhas":
 
     if busca:
         cur.execute("""
-            SELECT l.codigo_linha,
+            SELECT l.id,
+                   l.codigo_linha,
                    l.nome_linha,
                    f.rua,
                    f.bairro,
@@ -261,7 +261,8 @@ elif menu == "Consultar Linhas":
 
     else:
         cur.execute("""
-            SELECT l.codigo_linha,
+            SELECT l.id,
+                   l.codigo_linha,
                    l.nome_linha,
                    f.rua,
                    f.bairro,
@@ -279,10 +280,12 @@ elif menu == "Consultar Linhas":
 
     if not resultados:
         st.warning("Nenhuma linha encontrada.")
+
     else:
         st.caption(f"{len(resultados)} linha(s) encontrada(s).")
 
-        for codigo, nome, rua, bairro, lat, lon, img in resultados:
+        for linha_id, codigo, nome, rua, bairro, lat, lon, img in resultados:
+
             st.subheader(f"Linha {codigo} – {nome}")
 
             if rua or bairro:
@@ -293,15 +296,15 @@ elif menu == "Consultar Linhas":
                 st.link_button("Abrir no Google Maps", maps)
 
             if img:
-                st.image(img, use_container_width=True)
+                st.image(img, width=350)
 
+            # =========================
             # HORÁRIOS
-            cur.execute(
-                """
+            # =========================
+            cur.execute("""
                 SELECT tipo_dia, horario, observacao
-                FROM horario_saida hs
-                JOIN linha l ON l.id = hs.id_linha
-                WHERE l.codigo_linha = %s
+                FROM horario_saida
+                WHERE id_linha = %s
                 ORDER BY
                     CASE tipo_dia
                         WHEN 'UTIL' THEN 1
@@ -309,46 +312,27 @@ elif menu == "Consultar Linhas":
                         WHEN 'DOMINGO' THEN 3
                     END,
                     horario
-                """,
-                (codigo,)
-            )
-            
+            """, (linha_id,))
+
             horarios = cur.fetchall()
-            
+
             if horarios:
-            
+
                 dias = {
                     "UTIL": [],
                     "SABADO": [],
                     "DOMINGO": []
                 }
-            
+
                 for tipo_dia, horario, observacao in horarios:
-            
+
                     texto = horario.strftime("%H:%M")
-            
+
                     if observacao:
                         texto += f" ({observacao})"
-            
+
                     dias[tipo_dia].append(texto)
-            
-                def exibir_horarios_em_blocos(lista_horarios):
-            
-                    for i in range(0, len(lista_horarios), 4):
-            
-                        cols = st.columns(4)
-            
-                        for j, horario in enumerate(lista_horarios[i:i+4]):
-            
-                            cols[j].button(
-                                horario,
-                                disabled=True,
-                                use_container_width=True,
-                                key=f"{codigo}_{horario}_{i}_{j}"
-                            )
-            
-                st.subheader("🕒 Horários")
-            
+
                 st.subheader("🕒 Horários")
 
                 with st.expander("🗓️ Dias Úteis", expanded=True):
@@ -356,19 +340,19 @@ elif menu == "Consultar Linhas":
                         exibir_horarios(dias["UTIL"])
                     else:
                         st.info("Não há horários cadastrados.")
-                
+
                 with st.expander("🗓️ Sábados"):
                     if dias["SABADO"]:
                         exibir_horarios(dias["SABADO"])
                     else:
                         st.info("Esta linha não opera aos sábados.")
-                
+
                 with st.expander("🗓️ Domingos"):
                     if dias["DOMINGO"]:
                         exibir_horarios(dias["DOMINGO"])
                     else:
                         st.info("Esta linha não opera aos domingos.")
-            
+
             else:
                 st.info("Horários ainda não cadastrados.")
 
