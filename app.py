@@ -7,6 +7,15 @@ from r2 import upload_imagem
 load_dotenv()
 
 st.set_page_config(page_title="Linhas de Ônibus", layout="wide")
+st.markdown("""
+<style>
+img {
+    max-width: 300px !important;
+    margin: auto;
+    display: block;
+}
+</style>
+""", unsafe_allow_html=True)
 st.title("🚍 Linhas de Ônibus – Finais de Linha")
 
 # =========================
