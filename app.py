@@ -364,8 +364,5 @@ elif menu == "Consultar Linhas":
                     exibir_horarios_em_blocos(dias["DOMINGO"])
                 else:
                     st.info("Esta linha não opera aos domingos.")
-            
-            else:
-                st.info("Horários ainda não cadastrados.")
 
             st.divider()
