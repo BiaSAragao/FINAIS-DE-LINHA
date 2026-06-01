@@ -231,6 +231,12 @@ elif menu == "Cadastrar / Editar Final de Linha":
 elif menu == "Consultar Linhas":
     st.header("Consultar Linhas")
 
+    def exibir_horarios(lista_horarios):
+
+    for i in range(0, len(lista_horarios), 4):
+        linha = lista_horarios[i:i+4]
+        st.text(" | ".join(linha))
+
     busca = st.text_input(
         "🔎 Pesquisar linha (código ou nome)",
         placeholder="Ex: 007 ou Jardim Europa"
@@ -343,27 +349,23 @@ elif menu == "Consultar Linhas":
             
                 st.subheader("🕒 Horários")
             
-                tab1, tab2, tab3 = st.tabs([
-                    "🗓️ Dias Úteis",
-                    "🗓️ Sábados",
-                    "🗓️ Domingos"
-                ])
-            
-                with tab1:
+                st.subheader("🕒 Horários")
+
+                with st.expander("🗓️ Dias Úteis", expanded=True):
                     if dias["UTIL"]:
-                        exibir_horarios_em_blocos(dias["UTIL"])
+                        exibir_horarios(dias["UTIL"])
                     else:
                         st.info("Não há horários cadastrados.")
-            
-                with tab2:
+                
+                with st.expander("🗓️ Sábados"):
                     if dias["SABADO"]:
-                        exibir_horarios_em_blocos(dias["SABADO"])
+                        exibir_horarios(dias["SABADO"])
                     else:
                         st.info("Esta linha não opera aos sábados.")
-            
-                with tab3:
+                
+                with st.expander("🗓️ Domingos"):
                     if dias["DOMINGO"]:
-                        exibir_horarios_em_blocos(dias["DOMINGO"])
+                        exibir_horarios(dias["DOMINGO"])
                     else:
                         st.info("Esta linha não opera aos domingos.")
             
